@@ -1,45 +1,118 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+/* frontend/src/lib/api.ts */
 
-export type TokenPair = { access_token: string; refresh_token: string; token_type: 'bearer' }
+const API_BASE =
+  (import.meta as any).env?.VITE_API_URL ||
+  "https://theo-one-market-production.up.railway.app";
 
-export function getApiBase() { return API_BASE }
+const TENANT_ID =
+  (import.meta as any).env?.VITE_TENANT_ID || "";
 
-function jsonHeaders(extra?: Record<string,string>) {
-  return { 'Content-Type': 'application/json', ...(extra || {}) }
+type ApiError = Error & {
+  status?: number;
+  data?: any;
+};
+
+function joinUrl(base: string, path: string) {
+  const b = base.endsWith("/") ? base.slice(0, -1) : base;
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${b}${p}`;
 }
 
-export async function apiFetch<T>(path: string, opts: RequestInit & { tenantId?: string } = {}): Promise<T> {
-  const token = localStorage.getItem('access_token')
-  const headers: Record<string,string> = { ...(opts.headers as any || {}) }
-  if (!headers['Content-Type'] && opts.body) headers['Content-Type'] = 'application/json'
-  if (token) headers['Authorization'] = `Bearer ${token}`
-  if (opts.tenantId) headers['X-Tenant-Id'] = opts.tenantId
-  const res = await fetch(`${API_BASE}${path}`, { ...opts, headers })
-  const text = await res.text()
-  if (!res.ok) {
-    let detail = text
-    try { detail = JSON.parse(text).detail ?? text } catch {}
-    throw new Error(detail || `HTTP ${res.status}`)
+async function safeJson(res: Response) {
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
   }
-  return (text ? JSON.parse(text) : null) as T
+  try {
+    const t = await res.text();
+    return t || null;
+  } catch {
+    return null;
+  }
 }
 
-export async function register(email: string, password: string, display_name?: string) {
-  return apiFetch('/api/auth/register', { method:'POST', body: JSON.stringify({ email, password, display_name }) })
+export async function request(path: string, opts: RequestInit = {}) {
+  const url = joinUrl(API_BASE, path);
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(opts.headers as any),
+  };
+
+  if (TENANT_ID) {
+    headers["X-Tenant-Id"] = TENANT_ID;
+  }
+
+  const token = localStorage.getItem("access_token");
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(url, {
+    ...opts,
+    headers,
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok) {
+    const err: ApiError = new Error(
+      (data && (data.detail || data.message)) || `HTTP ${res.status}`
+    );
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+
+  return data;
 }
 
-export async function login(email: string, password: string): Promise<TokenPair> {
-  return apiFetch('/api/auth/login', { method:'POST', body: JSON.stringify({ email, password }) })
+/* ===================== AUTH ===================== */
+
+export type LoginResponse = {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+};
+
+export async function login(email: string, password: string) {
+  const t = (await request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  })) as LoginResponse;
+
+  if (t?.access_token) localStorage.setItem("access_token", t.access_token);
+  if (t?.refresh_token) localStorage.setItem("refresh_token", t.refresh_token);
+
+  return t;
+}
+
+export async function register(
+  email: string,
+  password: string,
+  display_name?: string
+) {
+  return await request("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, display_name }),
+  });
 }
 
 export async function me() {
-  return apiFetch('/api/auth/me', { method:'GET' })
+  return await request("/api/auth/me", {
+    method: "GET",
+  });
 }
 
-export async function myTenants() {
-  return apiFetch('/api/tenants', { method:'GET' })
-}
+export const api = {
+  request,
+  login,
+  register,
+  me,
+};
 
-export async function createTenant(name: string, slug: string) {
-  return apiFetch('/api/tenants', { method:'POST', body: JSON.stringify({ name, slug }) })
-}
+export default api;
