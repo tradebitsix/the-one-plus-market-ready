@@ -1,11 +1,11 @@
 /* frontend/src/lib/api.ts */
 
 const API_BASE =
-  (import.meta as any).env?.VITE_API_URL ||
-  "https://theo-one-market-production.up.railway.app";
+  ((import.meta as any).env?.VITE_API_URL as string | undefined) ||
+  "https://theo-one-market-production.up.railway.app/api";
 
 const TENANT_ID =
-  (import.meta as any).env?.VITE_TENANT_ID || "";
+  ((import.meta as any).env?.VITE_TENANT_ID as string | undefined) || "";
 
 type ApiError = Error & {
   status?: number;
@@ -28,8 +28,7 @@ async function safeJson(res: Response) {
     }
   }
   try {
-    const t = await res.text();
-    return t || null;
+    return await res.text();
   } catch {
     return null;
   }
@@ -40,23 +39,15 @@ export async function request(path: string, opts: RequestInit = {}) {
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(opts.headers as any),
+    ...(opts.headers as Record<string, string>),
   };
 
-  if (TENANT_ID) {
-    headers["X-Tenant-Id"] = TENANT_ID;
-  }
+  if (TENANT_ID) headers["X-Tenant-Id"] = TENANT_ID;
 
   const token = localStorage.getItem("access_token");
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(url, {
-    ...opts,
-    headers,
-  });
-
+  const res = await fetch(url, { ...opts, headers });
   const data = await safeJson(res);
 
   if (!res.ok) {
@@ -70,8 +61,6 @@ export async function request(path: string, opts: RequestInit = {}) {
 
   return data;
 }
-
-/* ===================== AUTH ===================== */
 
 export type LoginResponse = {
   access_token: string;
@@ -91,11 +80,7 @@ export async function login(email: string, password: string) {
   return t;
 }
 
-export async function register(
-  email: string,
-  password: string,
-  display_name?: string
-) {
+export async function register(email: string, password: string, display_name: string) {
   return await request("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({ email, password, display_name }),
@@ -103,16 +88,8 @@ export async function register(
 }
 
 export async function me() {
-  return await request("/api/auth/me", {
-    method: "GET",
-  });
+  return await request("/api/auth/me", { method: "GET" });
 }
 
-export const api = {
-  request,
-  login,
-  register,
-  me,
-};
-
+export const api = { request, login, register, me };
 export default api;

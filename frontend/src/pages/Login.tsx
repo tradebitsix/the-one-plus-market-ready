@@ -1,40 +1,71 @@
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../lib/auth'
-import { useTenant } from '../lib/tenant'
+import { useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
 
 export default function Login() {
-  const { login } = useAuth()
-  const { refresh } = useTenant()
   const nav = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [err, setErr] = useState<string | null>(null)
 
   return (
-    <div className="max-w-md mx-auto">
-      <h1 className="text-2xl font-semibold mb-2">Login</h1>
-      <p className="text-slate-400 mb-6">Access your tenants and dashboards.</p>
+    <div className="max-w-md mx-auto mt-20 p-6 border border-slate-700 rounded-xl bg-slate-900">
+      <h1 className="text-2xl font-semibold mb-4">Login</h1>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
-        <label className="block text-sm text-slate-300 mb-2">Email</label>
-        <input className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 mb-4"
-          value={email} onChange={e=>setEmail(e.target.value)} />
+      <input
+        className="w-full p-2 mb-3 bg-slate-800 border border-slate-600 rounded"
+        placeholder="Email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+      />
 
-        <label className="block text-sm text-slate-300 mb-2">Password</label>
-        <input type="password" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 mb-4"
-          value={password} onChange={e=>setPassword(e.target.value)} />
+      <input
+        type="password"
+        className="w-full p-2 mb-3 bg-slate-800 border border-slate-600 rounded"
+        placeholder="Password"
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+      />
 
-        {err && <div className="text-sm text-red-300 mb-3">{err}</div>}
+      {err && <div className="text-red-400 mb-3">{err}</div>}
 
-        <button className="w-full rounded-lg bg-sky-600 hover:bg-sky-500 px-3 py-2 font-medium"
-          onClick={async ()=>{ setErr(null); try { await login(email, password); await refresh(); nav('/app/overview'); } catch (e:any) { setErr(e.message || 'Login failed') } }}>
-          Login
-        </button>
+      <button
+        className="w-full bg-sky-600 hover:bg-sky-700 p-2 rounded text-white"
+        onClick={async () => {
+          setErr(null)
+          try {
+            const res = await fetch(
+              `${import.meta.env.VITE_API_URL}/api/auth/login`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password }),
+              }
+            )
 
-        <div className="text-sm text-slate-400 mt-4">
-          No account? <Link to="/register">Register</Link>
-        </div>
+            const data = await res.json().catch(() => ({}))
+
+            if (!res.ok) {
+              setErr(data?.detail || "Login failed")
+              return
+            }
+
+            if (!data.access_token) {
+              setErr("No token returned")
+              return
+            }
+
+            localStorage.setItem("access_token", data.access_token)
+            nav("/")
+          } catch (e: any) {
+            setErr(e.message || "Network error")
+          }
+        }}
+      >
+        Login
+      </button>
+
+      <div className="mt-4 text-slate-400">
+        No account? <Link to="/register">Register</Link>
       </div>
     </div>
   )
