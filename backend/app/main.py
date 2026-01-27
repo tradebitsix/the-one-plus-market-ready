@@ -10,7 +10,14 @@ from app.api.routes import safety
 from app.api.routes import billing
 
 app = FastAPI(title="THE_ONE+ API")
-
+@app.get("/")
+def root():
+    return {
+        "ok": True,
+        "health": "/health",
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+    }
 # CORS — allow frontend + Railway
 app.add_middleware(
     CORSMiddleware,
