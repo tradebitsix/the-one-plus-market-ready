@@ -1,47 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth
-from app.api.routes import tenants
-from app.api.routes import admin
-from app.api.routes import memory
-from app.api.routes import growth
-from app.api.routes import safety
-from app.api.routes import billing
+from app.api.router import api as api_router  # if you already use app/api/router.py
 
-app = FastAPI(title="THE_ONE+ API")
-@app.get("/")
-def root():
-    return {
-        "ok": True,
-        "health": "/health",
-        "docs": "/docs",
-        "openapi": "/openapi.json",
-    }
-# CORS — allow frontend + Railway
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://192.0.0.4:5173",
-        "https://theo-one-market-production.up.railway.app",
-        "https://theo-one-market-production.up.railway.app/docs"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="THE_ONE+ API", version="0.1.0")
 
-# ---- HEALTH CHECK ----
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-from fastapi.middleware.cors import CORSMiddleware
-
+# ---- CORS (SINGLE SOURCE OF TRUTH) ----
 origins = [
     "http://localhost:3000",
+    "http://localhost:5173",
+    "http://192.0.0.4:5173",
     "https://market-ready.vercel.app",
-    "https://your-production-domain.com"
+    # add your real custom domain here when you have it:
+    # "https://theone.yourdomain.com",
 ]
 
 app.add_middleware(
@@ -51,11 +22,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---- HEALTH CHECK ----
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 # ---- ROUTERS ----
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-app.include_router(tenants.router, prefix="/api/tenants", tags=["tenants"])
-app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
-app.include_router(memory.router, prefix="/api/memory", tags=["memory"])
-app.include_router(growth.router, prefix="/api/growth", tags=["growth"])
-app.include_router(safety.router, prefix="/api/safety", tags=["safety"])
-app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
+# If you have app/api/router.py like your screenshot showed, use this:
+app.include_router(api_router)
+
+# -------------------------------------------------------------------
+# IMPORTANT:
+# 1) Do NOT add Railway API domain to allow_origins.
+# 2) Do NOT add "/docs" to allow_origins.
+# 3) Do NOT import CORSMiddleware again lower in the file.
+# 4) Do NOT define a second origins list anywhere else.
+# -------------------------------------------------------------------
+```0
