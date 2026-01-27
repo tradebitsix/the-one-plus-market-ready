@@ -1,43 +1,83 @@
-const API_BASE = "https://theo-one-market-production.up.railway.app";
+// frontend/src/lib/api.ts
+const rawBase = import.meta.env.VITE_API_URL;
 
-function joinUrl(base: string, path: string) {
-  const b = base.endsWith("/") ? base.slice(0, -1) : base;
-  const p = path.startsWith("/") ? path : `/${path}`;
-  return `${b}${p}`;
+// Vercel builds can succeed even if env is missing; fail loudly at runtime.
+if (!rawBase) {
+  throw new Error("VITE_API_URL is missing. Set it in Vercel → Project → Settings → Environment Variables.");
 }
 
-export async function request(path: string, options: RequestInit = {}) {
-  const url = joinUrl(API_BASE, path);
+// Normalize: no trailing slash
+const BASE = rawBase.replace(/\/+$/, "");
 
-  const res = await fetch(url, {
+type LoginResponse = {
+  access_token?: string;
+  token?: string;
+  token_type?: string;
+};
+
+function join(path: string) {
+  // path must start with "/"
+  return `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem("token");
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as any),
+  };
+
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(join(path), {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+    headers,
+    // If you are NOT using cookies, keep credentials OFF.
+    // Turning it on can trigger stricter CORS rules.
     credentials: "omit",
   });
 
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(t || res.statusText);
+  const text = await res.text();
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { raw: text };
   }
 
-  return res.json();
+  if (!res.ok) {
+    const msg =
+      data?.detail?.[0]?.msg ||
+      data?.detail ||
+      data?.message ||
+      `${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+
+  return data as T;
 }
 
 export const api = {
-  login: (email: string, password: string) =>
-    request("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
-  register: (email: string, password: string) =>
-    request("/api/auth/register", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
-  me: () => request("/api/auth/me", { method: "GET" }),
-};
+  async health() {
+    return request<{ status: string }>("/health", { method: "GET" });
+  },
 
-export default api;
+  async login(email: string, password: string) {
+    // Backend route per your router.py: /auth/login (NOT /api/auth/login)
+    const data = await request<LoginResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+
+    const tok = data.access_token || data.token;
+    if (!tok) throw new Error("Login succeeded but no token returned.");
+
+    localStorage.setItem("token", tok);
+    return tok;
+  },
+
+  async me() {
+    return request<any>("/auth/me", { method: "GET" });
+  },
+};
