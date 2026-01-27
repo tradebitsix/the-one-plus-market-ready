@@ -3,10 +3,10 @@ from .routes import auth, tenants, admin, memory, growth, safety, billing, ops
 
 api = APIRouter()
 
-# auth (no /api prefix)
+# auth is NOT under /api
 api.include_router(auth.router, prefix="/auth", tags=["auth"])
 
-# all other modules under /api
+# everything else is under /api/*
 api.include_router(tenants.router, prefix="/api/tenants", tags=["tenants"])
 api.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 api.include_router(memory.router, prefix="/api/memory", tags=["memory"])
