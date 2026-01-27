@@ -1,18 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from app.api.router import api as api_router  # app/api/router.py
+from app.api.router import api as api_router
 
 app = FastAPI(title="THE_ONE+ API", version="0.1.0")
 
-# ---- CORS (SINGLE SOURCE OF TRUTH) ----
+# CORS
 origins = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://192.0.0.4:5173",
     "https://market-ready.vercel.app",
-    # add your real custom domain here when you have it:
-    # "https://theone.yourdomain.com",
 ]
 
 app.add_middleware(
@@ -23,11 +20,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---- HEALTH CHECK ----
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# ---- ROUTERS ----
+# include API
 app.include_router(api_router)
-```0
