@@ -1,7 +1,8 @@
 from fastapi import APIRouter
 from .routes import auth, tenants, admin, memory, growth, safety, billing, ops
 
-api = APIRouter()
+api = APIRouter(prefix="/api")
+
 api.include_router(auth.router, prefix="/auth", tags=["auth"])
 api.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api.include_router(admin.router, prefix="/admin", tags=["admin"])
