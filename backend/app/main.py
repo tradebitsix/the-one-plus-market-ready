@@ -36,7 +36,21 @@ app.add_middleware(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+from fastapi.middleware.cors import CORSMiddleware
 
+origins = [
+    "http://localhost:3000",
+    "https://market-ready.vercel.app",
+    "https://your-production-domain.com"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # ---- ROUTERS ----
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(tenants.router, prefix="/api/tenants", tags=["tenants"])
