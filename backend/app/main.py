@@ -4,12 +4,9 @@ from app.api.router import api as api_router
 
 app = FastAPI(title="THE_ONE+ API", version="0.1.0")
 
-# CORS
 origins = [
-    "http://localhost:3000",
     "http://localhost:5173",
-    "http://192.0.0.4:5173",
-    "https://market-ready.vercel.app",
+    "https://the-one-plus-market-ready.vercel.app",
 ]
 
 app.add_middleware(
@@ -24,5 +21,4 @@ app.add_middleware(
 def health():
     return {"status": "ok"}
 
-# include API
 app.include_router(api_router)
