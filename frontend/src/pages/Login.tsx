@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 
 export default function Login() {
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -13,15 +14,16 @@ export default function Login() {
     const eTrim = email.trim();
     const pTrim = password.trim();
 
-    // Block the empty-submit that triggers FastAPI/Pydantic "valid dictionary" errors
     if (!eTrim || !pTrim) {
       setError("Email and password are required.");
       return;
     }
 
     try {
-      await api.login(eTrim, pTrim);
-      window.location.href = "/"; // change to "/app" if your dashboard route is /app
+      await login(eTrim, pTrim);
+
+      // If "/" routes back to login, change this to your real dashboard route.
+      window.location.href = "/app";
     } catch (err: any) {
       setError(err?.message || "Login failed");
     }
@@ -47,4 +49,3 @@ export default function Login() {
     </form>
   );
 }
-```0
