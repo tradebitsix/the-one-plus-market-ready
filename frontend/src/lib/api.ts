@@ -1,50 +1,48 @@
 // frontend/src/lib/api.ts
-const rawBase = import.meta.env.VITE_API_URL;
+const rawBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
 
-// Vercel builds can succeed even if env is missing; fail loudly at runtime.
 if (!rawBase) {
-  throw new Error("VITE_API_URL is missing. Set it in Vercel → Project → Settings → Environment Variables.");
+  throw new Error("Missing VITE_API_URL. Set it in Vercel → Project → Settings → Environment Variables.");
 }
 
-// Normalize: no trailing slash
-const BASE = rawBase.replace(/\/+$/, "");
-
-type LoginResponse = {
-  access_token?: string;
-  token?: string;
-  token_type?: string;
-};
+const BASE = String(rawBase).replace(/\/+$/, "");
 
 function join(path: string) {
-  // path must start with "/"
   return `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 }
 
+async function readJson(res: Response) {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    return { raw: text };
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("access_token");
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options.headers as any),
   };
+
+  // Only set JSON Content-Type when sending JSON bodies
+  const hasBody = typeof options.body !== "undefined";
+  const isForm = headers["Content-Type"] === "application/x-www-form-urlencoded";
+  if (hasBody && !isForm && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(join(path), {
     ...options,
     headers,
-    // If you are NOT using cookies, keep credentials OFF.
-    // Turning it on can trigger stricter CORS rules.
     credentials: "omit",
   });
 
-  const text = await res.text();
-  let data: any = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { raw: text };
-  }
+  const data: any = await readJson(res);
 
   if (!res.ok) {
     const msg =
@@ -58,91 +56,80 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
-export const api = {
-  async health() {
-    return request<{ status: string }>("/health", { method: "GET" });
-  },
-
-  // frontend/src/lib/api.ts
-const rawBase = import.meta.env.VITE_API_URL;
-
-// Vercel builds can succeed even if env is missing; fail loudly at runtime.
-if (!rawBase) {
-  throw new Error("VITE_API_URL is missing. Set it in Vercel → Project → Settings → Environment Variables.");
-}
-
-// Normalize: no trailing slash
-const BASE = rawBase.replace(/\/+$/, "");
-
-type LoginResponse = {
-  access_token?: string;
-  token?: string;
+type TokenPair = {
+  access_token: string;
+  refresh_token?: string;
   token_type?: string;
 };
 
-function join(path: string) {
-  // path must start with "/"
-  return `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
-}
-
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem("token");
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as any),
-  };
-
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(join(path), {
-    ...options,
-    headers,
-    // If you are NOT using cookies, keep credentials OFF.
-    // Turning it on can trigger stricter CORS rules.
-    credentials: "omit",
-  });
-
-  const text = await res.text();
-  let data: any = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { raw: text };
-  }
-
-  if (!res.ok) {
-    const msg =
-      data?.detail?.[0]?.msg ||
-      data?.detail ||
-      data?.message ||
-      `${res.status} ${res.statusText}`;
-    throw new Error(msg);
-  }
-
-  return data as T;
-}
-
 export const api = {
-  async health() {
+  health() {
     return request<{ status: string }>("/health", { method: "GET" });
   },
 
-  async login(email: string, password: string) {
-    // Backend route per your router.py: /auth/login (NOT /api/auth/login)
-    const data = await request<LoginResponse>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
+  // Login tries JSON first; if backend expects OAuth2 form, it retries with form payload.
+  async login(email: string, password: string): Promise<TokenPair> {
+    // Attempt 1: JSON (matches your current swagger JSON body pattern)
+    try {
+      const data = await request<any>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
 
-    const tok = data.access_token || data.token;
-    if (!tok) throw new Error("Login succeeded but no token returned.");
+      const access =
+        data?.access_token ||
+        data?.token ||
+        data?.accessToken ||
+        data?.access;
 
-    localStorage.setItem("token", tok);
-    return tok;
+      if (!access) throw new Error("Login response missing token.");
+      return {
+        access_token: access,
+        refresh_token: data?.refresh_token,
+        token_type: data?.token_type || "bearer",
+      };
+    } catch (e: any) {
+      // If JSON schema mismatch causes 422, retry with OAuth2PasswordRequestForm style:
+      // Content-Type: application/x-www-form-urlencoded
+      // fields: username, password
+      const form = new URLSearchParams();
+      form.set("username", email);
+      form.set("password", password);
+
+      const res = await fetch(join("/auth/login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+        credentials: "omit",
+      });
+
+      const data: any = await readJson(res);
+
+      if (!res.ok) {
+        const msg =
+          data?.detail?.[0]?.msg ||
+          data?.detail ||
+          data?.message ||
+          `${res.status} ${res.statusText}`;
+        throw new Error(msg);
+      }
+
+      const access =
+        data?.access_token ||
+        data?.token ||
+        data?.accessToken ||
+        data?.access;
+
+      if (!access) throw new Error("Login response missing token.");
+      return {
+        access_token: access,
+        refresh_token: data?.refresh_token,
+        token_type: data?.token_type || "bearer",
+      };
+    }
   },
 
-  async me() {
+  me() {
     return request<any>("/auth/me", { method: "GET" });
   },
 };
