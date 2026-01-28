@@ -9,20 +9,42 @@ export default function Login() {
   const submit = async (e: any) => {
     e.preventDefault();
     setError("");
+
+    const eTrim = email.trim();
+    const pTrim = password.trim();
+
+    // Block the empty-submit that triggers FastAPI/Pydantic "valid dictionary" errors
+    if (!eTrim || !pTrim) {
+      setError("Email and password are required.");
+      return;
+    }
+
     try {
-      await api.login(email, password);
-      window.location.href = "/";
-    } catch (e: any) {
-      setError(e.message || "Login failed");
+      await api.login(eTrim, pTrim);
+      window.location.href = "/"; // change to "/app" if your dashboard route is /app
+    } catch (err: any) {
+      setError(err?.message || "Login failed");
     }
   };
 
   return (
     <form onSubmit={submit}>
-      <input value={email} onChange={e => setEmail(e.target.value)} />
-      <input type="password" value={password} onChange={e => setPassword(e.target.value)} />
+      <input
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        autoComplete="email"
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        autoComplete="current-password"
+      />
       {error && <div>{error}</div>}
       <button type="submit">Login</button>
     </form>
   );
 }
+```0
