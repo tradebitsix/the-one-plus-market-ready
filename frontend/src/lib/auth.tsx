@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import * as api from './api'
+import { api } from './api'
 
 type User = { id: string; email: string; display_name?: string | null; is_superadmin: boolean }
 type AuthState = {
@@ -31,7 +31,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function doLogin(email: string, password: string) {
     const tok = await api.login(email, password)
     localStorage.setItem('access_token', tok.access_token)
-    localStorage.setItem('refresh_token', tok.refresh_token)
+    if (tok.refresh_token) localStorage.setItem('refresh_token', tok.refresh_token)
+    else localStorage.removeItem('refresh_token')
     await refreshMe()
   }
 
